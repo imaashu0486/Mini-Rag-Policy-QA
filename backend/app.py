@@ -9,7 +9,6 @@ from backend.rerank import rerank_chunks
 from backend.context_builder import build_context
 from backend.answer_generator import generate_answer
 
-# Create app
 app = FastAPI(title="Mini RAG")
 
 # CORS
@@ -21,10 +20,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ✅ Serve frontend
-app.mount("/ui", StaticFiles(directory="backend/static", html=True), name="static")
-
-
 class QueryRequest(BaseModel):
     question: str
 
@@ -35,13 +30,12 @@ def ask_question(req: QueryRequest):
     retrieved = retrieve_chunks(req.question, top_k=10)
     reranked = rerank_chunks(req.question, retrieved, top_n=5)
 
-    # No-answer handling
     if not reranked or reranked[0]["score"] < 3.0:
         return {
             "question": req.question,
             "answer": "No relevant information found in the provided documents.",
             "citations": [],
-            "latency_ms": int((time.time() - start) * 1000)
+            "latency_ms": int((time.time() - start) * 1000),
         }
 
     context_text, citations = build_context(reranked)
@@ -51,9 +45,12 @@ def ask_question(req: QueryRequest):
         "question": req.question,
         "answer": answer,
         "citations": citations,
-        "latency_ms": int((time.time() - start) * 1000)
+        "latency_ms": int((time.time() - start) * 1000),
     }
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+# ✅ STATIC FILES MUST BE LAST
+app.mount("/", StaticFiles(directory="backend/static", html=True), name="static")
