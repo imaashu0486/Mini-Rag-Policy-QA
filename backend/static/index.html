@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mini RAG</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: auto;
+            padding: 40px;
+        }
+        input, button {
+            width: 100%;
+            padding: 10px;
+            margin-top: 10px;
+        }
+        .answer {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f5f5f5;
+        }
+        .citation {
+            font-size: 0.9em;
+            color: #555;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+
+<h2>Mini RAG – Policy Q&A</h2>
+
+<input id="question" placeholder="Ask a question about the document..." />
+<button onclick="ask()">Ask</button>
+
+<div class="answer" id="result"></div>
+
+<script>
+async function ask() {
+    const q = document.getElementById("question").value;
+    const result = document.getElementById("result");
+
+    result.innerHTML = "Loading...";
+
+    const res = await fetch("http://127.0.0.1:8000/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: q })
+    });
+
+    const data = await res.json();
+
+    let html = `<b>Answer:</b><br>${data.answer}<br><br>`;
+
+    if (data.citations.length > 0) {
+        html += `<b>Citations:</b>`;
+        data.citations.forEach(c => {
+            html += `<div class="citation">[${c.id}] ${c.source} – ${c.section}</div>`;
+        });
+    }
+
+    html += `<br><i>Latency: ${data.latency_ms} ms</i>`;
+    result.innerHTML = html;
+}
+</script>
+
+</body>
+</html>
