@@ -22,7 +22,8 @@ app.add_middleware(
 )
 
 # ✅ Serve frontend
-app.mount("/", StaticFiles(directory="backend/static", html=True), name="static")
+app.mount("/ui", StaticFiles(directory="backend/static", html=True), name="static")
+
 
 class QueryRequest(BaseModel):
     question: str

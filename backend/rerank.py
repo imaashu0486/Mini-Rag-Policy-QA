@@ -1,3 +1,7 @@
+import os
+
+ENABLE_RERANK = os.getenv("ENABLE_RERANK", "false").lower() == "true"
+
 from sentence_transformers import CrossEncoder
 
 model = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
