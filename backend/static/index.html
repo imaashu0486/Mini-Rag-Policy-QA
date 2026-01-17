@@ -42,25 +42,31 @@ async function ask() {
 
     result.innerHTML = "Loading...";
 
-    const res = await fetch("/ask", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: q })
-    });
-
-    const data = await res.json();
-
-    let html = `<b>Answer:</b><br>${data.answer}<br><br>`;
-
-    if (data.citations.length > 0) {
-        html += `<b>Citations:</b>`;
-        data.citations.forEach(c => {
-            html += `<div class="citation">[${c.id}] ${c.source} – ${c.section}</div>`;
+    try {
+        const res = await fetch("/ask", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ question: q })
         });
-    }
 
-    html += `<br><i>Latency: ${data.latency_ms} ms</i>`;
-    result.innerHTML = html;
+        const data = await res.json();
+
+        let html = `<b>Answer:</b><br>${data.answer}<br><br>`;
+
+        if (data.citations && data.citations.length > 0) {
+            html += `<b>Citations:</b>`;
+            data.citations.forEach(c => {
+                html += `<div class="citation">[${c.id}] ${c.source} – ${c.section}</div>`;
+            });
+        }
+
+        html += `<br><i>Latency: ${data.latency_ms} ms</i>`;
+        result.innerHTML = html;
+
+    } catch (err) {
+        result.innerHTML = `<b>Error:</b> ${err}`;
+        console.error(err);
+    }
 }
 </script>
 
