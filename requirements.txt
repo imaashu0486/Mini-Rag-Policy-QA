@@ -4,4 +4,4 @@ qdrant-client
 groq
 tiktoken
 python-dotenv
-
+openai
