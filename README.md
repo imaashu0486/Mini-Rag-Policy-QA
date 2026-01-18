@@ -37,128 +37,150 @@ The design focuses on **correctness, transparency, and deployment realism** rath
 ---
 
 ## 🏗️ System Architecture
+User Query
+↓
+Embedding
+↓
+Qdrant Vector Search
+↓
+Reranking (Full Mode)
+↓
+Context Selection
+↓
+Answer Generation
+↓
+Citations + Confidence
 
-
-
-
-
-# Mini RAG System – Policy Question Answering
-
-## Overview
-This project implements a minimal Retrieval-Augmented Generation (RAG) system for answering questions over policy documents.  
-The system retrieves relevant document chunks, reranks them, and generates grounded answers with explicit citations.
-
-The design prioritizes correctness, transparency, and alignment with real-world RAG workflows.
 
 ---
 
-## Architecture
-The end-to-end query flow is:
+## ⚙️ Core Components
 
-Query → Vector Retrieval → Reranking → Answer Generation → Citations
-
-### Components
-- **Embeddings**: sentence-transformers (`all-MiniLM-L6-v2`)
+### Backend
+- **Framework**: FastAPI
 - **Vector Database**: Qdrant
-- **Retriever**: Top-K cosine similarity search
-- **Reranker**: Cross-Encoder (`ms-marco-MiniLM-L-6-v2`)
-- **Answering**: Context-grounded extractive answering
-- **Backend**: FastAPI
-- **Frontend**: Static HTML (served via FastAPI)
+- **Chunking**: Overlapping text chunks
+- **Retrieval**: Cosine similarity search
+- **Reranking**: Cross-Encoder (local mode)
+- **Answering**: Context-grounded generation
+
+### Frontend
+- Static HTML served via FastAPI
+- Features:
+  - Document ingestion
+  - Question answering
+  - Retrieved chunk viewer
+  - Highlighted supporting sentences
+  - Confidence indicator
 
 ---
 
-## Document Ingestion
-- Documents are split into overlapping chunks before embedding
+## 📄 Document Ingestion
+
+- Documents are split into overlapping chunks
 - Each chunk stores metadata:
   - Document title
-  - Section name
-  - Chunk index
-- Chunks and embeddings are stored in Qdrant
+  - Source
+  - Chunk position
+- Embeddings are generated and stored in Qdrant
+- Ingestion is available via the `/ingest` endpoint
 
 ---
 
-## Retrieval & Reranking
-1. A user query is embedded
-2. Top-K relevant chunks are retrieved from Qdrant
-3. Retrieved chunks are reranked using a cross-encoder
-4. The highest-ranked chunks are used for answering
+## 🔍 Retrieval & Answer Generation
+
+1. User query is embedded
+2. Top-K chunks are retrieved from Qdrant
+3. Chunks are reranked (Full Mode only)
+4. Answer is generated **only from retrieved context**
+5. Inline citations are detected
+6. Confidence is computed:
+   - **High** → Answer grounded in retrieved chunks
+   - **Low** → Weak grounding
+   - **None** → No relevant information found
+
+This prevents hallucination and ensures explainability.
 
 ---
 
-## Answer Generation
-- Answers are generated strictly from retrieved context
-- Each answer includes inline citations
-- A confidence threshold is applied to handle no-answer cases
-- If no relevant context is found, the system responds:
-  > *No relevant information found in the provided documents.*
+## 🚦 Deployment Modes
 
-This prevents hallucination and ensures document grounding.
+### ✅ Full Mode (Local / Development)
 
----
+- Uses `sentence-transformers`
+- Uses cross-encoder reranker
+- Best answer quality
+- Recommended for local testing
 
-## API Endpoints
-
-### Health Check
-
-```bash
-GET/health
+```env
+DEPLOYMENT_MODE=full
 ```
+### Lite Mode (Production / Free Tier)
 
-- This endpoint verifies that the backend service is running and reachable.
+- Uses deterministic mock embeddings
+- No heavy ML models loaded
+- Memory-safe for Render / Vercel
+- Preserves full RAG workflow logic
 
-### Ask a Question
+```env
+DEPLOYMENT_MODE=full
+```
+- Lite mode exists intentionally to handle real-world cloud constraints.
 
-```bash
-POST /ask
+## 🌐 API Endpoints
 
-- Answers are generated only from retrieved document context
-- Citations map directly to the source document and chunk
-- Latency is returned for transparency
+| Method | Endpoint  | Description     |
+| ------ | --------- | --------------- |
+| GET    | `/health` | Health check    |
+| POST   | `/ingest` | Ingest document |
+| POST   | `/query`  | Ask a question  |
+| GET    | `/ui/`    | Web interface   |
 
-## Frontend
+## 🧪 Example Queries
 
-- A lightweight web interface is provided for querying the system
-- Features:
--      Question input box
--      Answer display panel
--      Explicit citations
--      Response latency
-- The frontend is served directly by FastAPI at the root path (/)
+- How are interns evaluated?
+- Which document defines the selection policy?
+- Is performance mentioned in the policy?
+- What happens if the answer is not present?
 
-## Running Locally
 
-### Start Qdrant
+## 🧯 Safety & Reliability
 
+- Prevents hallucinations by refusing unsupported answers
+- Ensures vector dimension consistency
+- Handles empty or weak retrieval gracefully
+- Avoids API quota failures in production
+
+## 🚀 Running Locally
+
+# 1️⃣ Start Qdrant
 ```bash
 docker run -p 6333:6333 qdrant/qdrant
-
-### Start Backend
-
+```
+# 2️⃣ Install Dependencies
 ```bash
+pip install -r requirements.txt
+```
+# 3️⃣ Run Backend
+'''bash
 uvicorn backend.app:app --reload
-
+``
 - Open in browser:
 ```bash
-http://127.0.0.1:8000
+http://127.0.0.1:8000/ui/
+```
 
-##Configuration
+## 📌 Design Decisions
 
-- Environment variables supported:
--         QDRANT_URL
--         QDRANT_COLLECTION
-- Defaults are provided for local development
+- Explicit separation of Full vs Lite execution
+- Fixed embedding dimension to prevent schema mismatch
+- Explainability prioritized over speculative generation
+- Built for clarity and robustness, not shortcuts
 
-## Evaluation Queries (Examples)
+## ⚠️ Known Limitations
 
-- 1.How are interns evaluated?
-- 2.Which document defines intern selection?
-- 3.Is performance mentioned in the policy?
-- 4.Are document sections preserved for citation?
-- 5.What happens if the answer is not present in the documents?
+- Lite mode uses mock embeddings (deployment trade-off)
+- No authentication layer (out of scope)
+- Single collection assumed per deployment
+These trade-offs are intentional and documented
 
-## Notes
-
-- Local Qdrant is used for development and testing
-- The architecture follows a standard production-style RAG pipeline
-- Design choices prioritize reliability, traceability, and grounded responses over speculative generation
