@@ -1,90 +1,170 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
+import uuid
 import time
 
-from backend.retrieve import retrieve_chunks
+from backend.chunking import chunk_text
+from backend.vector_store import upsert_chunks
+from backend.retrieve import retrieve
 from backend.rerank import rerank_chunks
-from backend.context_builder import build_context
 from backend.answer_generator import generate_answer
 
 app = FastAPI(title="Mini RAG")
 
-# CORS
+LAST_DOCUMENT = {}
+
+# ---------- HELPERS ----------
+
+def extract_supporting_sentence(answer: str, text: str):
+    for sentence in text.split("."):
+        s = sentence.strip()
+        if s and s.lower() in answer.lower():
+            return s
+    return None
+
+# ---------- MIDDLEWARE ----------
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# ---------- MODELS ----------
+
+class IngestRequest(BaseModel):
+    text: str
+    source: str
+    title: str
+
 class QueryRequest(BaseModel):
     question: str
 
-import os
+# ---------- INGEST ----------
 
-@app.post("/ask")
-def ask_question(req: QueryRequest):
-    start = time.time()
+@app.post("/ingest")
+def ingest(req: IngestRequest):
+    global LAST_DOCUMENT
 
-    # 🔒 Free-tier / hosted guard
-    if os.getenv("RENDER_DEPLOY") == "true":
-        return {
-            "question": req.question,
-            "answer": "Hosted demo runs in lightweight mode due to free-tier memory limits. Full RAG pipeline runs locally.",
-            "citations": [],
-            "latency_ms": 0,
-        }
+    doc_id = str(uuid.uuid4())
 
-    try:
-        retrieved = retrieve_chunks(req.question, top_k=10)
-        reranked = rerank_chunks(req.question, retrieved, top_n=5)
+    LAST_DOCUMENT = {
+        "title": req.title,
+        "source": req.source,
+        "text": req.text
+    }
 
-        if (
-            not reranked
-            or not isinstance(reranked, list)
-            or "score" not in reranked[0]
-            or reranked[0]["score"] < 3.0
-        ):
-            return {
-                "question": req.question,
-                "answer": "No relevant information found in the provided documents.",
-                "citations": [],
-                "latency_ms": int((time.time() - start) * 1000),
-            }
+    chunks = chunk_text(
+        text=req.text,
+        metadata={
+            "doc_id": doc_id,
+            "source": req.source,
+            "title": req.title,
+        },
+    )
 
-        context_text, citations = build_context(reranked)
+    upsert_chunks(chunks)
 
-        if not context_text:
-            return {
-                "question": req.question,
-                "answer": "No relevant information found in the provided documents.",
-                "citations": [],
-                "latency_ms": int((time.time() - start) * 1000),
-            }
+    return {
+        "status": "ingested",
+        "doc_id": doc_id,
+        "chunks_created": len(chunks),
+    }
 
-        answer = generate_answer(req.question, context_text, max_sentences=2)
+# ---------- QUERY (FULL METRICS + HIGHLIGHT + CONFIDENCE) ----------
 
-        return {
-            "question": req.question,
-            "answer": answer,
-            "citations": citations,
-            "latency_ms": int((time.time() - start) * 1000),
-        }
+@app.post("/query")
+def query(req: QueryRequest):
+    start_total = time.time()
 
-    except Exception:
-        return {
-            "question": req.question,
-            "answer": "Internal processing error.",
-            "citations": [],
-            "latency_ms": int((time.time() - start) * 1000),
-        }
+    # ---- Retrieval ----
+    t1 = time.time()
+    retrieved = retrieve(req.question)
+    t2 = time.time()
 
-@app.get("/health")
-def health():
-    return {"status": "ok"}
+    # ---- Rerank ----
+    reranked = rerank_chunks(req.question, retrieved)
+    t3 = time.time()
 
-# ✅ STATIC FILES MUST BE LAST
-app.mount("/", StaticFiles(directory="backend/static", html=True), name="static")
+    # ---- Build contexts ----
+    contexts = []
+    for i, c in enumerate(reranked):
+        contexts.append({
+            "id": i + 1,
+            "text": c["text"],
+            "title": c.get("title"),
+            "source": c.get("source"),
+            "position": c.get("position"),
+            "used_in_answer": False,
+            "highlight": None
+        })
+
+    # ---- LLM ----
+    answer = generate_answer(req.question, contexts)
+    t4 = time.time()
+
+    # ---- Citation + sentence highlight (explicit citations) ----
+    for c in contexts:
+        if f"[{c['id']}]" in answer:
+            c["used_in_answer"] = True
+            c["highlight"] = extract_supporting_sentence(answer, c["text"])
+
+    # ---- Fallback: sentence-level grounding across all chunks ----
+    if not any(c["used_in_answer"] for c in contexts):
+        for c in contexts:
+            for sentence in c["text"].split("."):
+                s = sentence.strip()
+                if s and s.lower() in answer.lower():
+                    c["used_in_answer"] = True
+                    c["highlight"] = s
+                    break
+            if c["used_in_answer"]:
+                break
+
+    # ---- Confidence ----
+    if "i don't know" in answer.lower():
+        confidence = "None"
+    elif any(c["used_in_answer"] for c in contexts):
+        confidence = "High"
+    else:
+        confidence = "Low"
+
+    # ---- Metrics ----
+    metrics = {
+        "retrieval_ms": int((t2 - t1) * 1000),
+        "rerank_ms": int((t3 - t2) * 1000),
+        "llm_ms": int((t4 - t3) * 1000),
+        "total_ms": int((t4 - start_total) * 1000),
+        "retrieved_chunks": len(retrieved),
+        "reranked_chunks": len(contexts),
+        "cited_chunks": sum(1 for c in contexts if c["used_in_answer"])
+    }
+
+    return {
+        "answer": answer,
+        "confidence": confidence,
+        "metrics": metrics,
+        "sources": contexts,
+        "retrieved_chunks": contexts
+    }
+
+# ---------- UTILS ----------
+
+@app.get("/document")
+def get_document():
+    return LAST_DOCUMENT
+
+@app.get("/")
+def root():
+    return RedirectResponse(url="/ui")
+
+# ---------- FRONTEND ----------
+
+app.mount("/ui", StaticFiles(directory="backend/static", html=True), name="static")

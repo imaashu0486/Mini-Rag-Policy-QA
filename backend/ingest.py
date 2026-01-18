@@ -1,47 +1,62 @@
-from vector_store import upsert_chunks
+global LAST_DOCUMENT
+LAST_DOCUMENT = {
+    "title": req.title,
+    "source": req.source,
+    "text": req.text
+}
 
-def chunk_text(text: str, metadata: dict):
+
+from backend.embeddings import embed_texts
+from backend.qdrant_conn import get_qdrant_client
+from backend.config import settings
+from uuid import uuid4
+import re
+
+CHUNK_SIZE = 800
+OVERLAP = 120
+
+
+def chunk_text(text: str):
     words = text.split()
     chunks = []
-
-    target_words = 4500
-    overlap_words = 600
-
     start = 0
-    idx = 0
-    total_words = len(words)
 
-    while start < total_words:
-        end = min(start + target_words, total_words)
-
-        chunks.append({
-            "text": " ".join(words[start:end]),
-            "metadata": {
-                **metadata,
-                "chunk_index": idx,
-                "word_range": f"{start}-{end}"
-            }
-        })
-
-        idx += 1
-        if end == total_words:
-            break
-        start = end - overlap_words
+    while start < len(words):
+        end = start + CHUNK_SIZE
+        chunk = " ".join(words[start:end])
+        chunks.append(chunk)
+        start = end - OVERLAP
 
     return chunks
 
 
-if __name__ == "__main__":
-    print("Starting full ingestion...")
+def ingest_document(
+    text: str,
+    source: str,
+    title: str | None = None
+):
+    client = get_qdrant_client()
 
-    text = "This policy defines how interns are evaluated and selected. " * 100
-    meta = {
-        "doc_id": "policy_001",
-        "doc_title": "Intern Evaluation Policy",
-        "section": "Overview"
-    }
+    chunks = chunk_text(text)
+    embeddings = embed_texts(chunks)
 
-    chunks = chunk_text(text, meta)
-    upsert_chunks(chunks)
+    points = []
+    for i, (chunk, vector) in enumerate(zip(chunks, embeddings)):
+        points.append({
+            "id": str(uuid4()),
+            "vector": vector,
+            "payload": {
+                "source": source,
+                "title": title or source,
+                "section": "N/A",
+                "chunk_index": i,
+                "text": chunk,
+            },
+        })
 
-    print("✅ Ingestion + vector upsert completed")
+    client.upsert(
+        collection_name=settings.QDRANT_COLLECTION,
+        points=points,
+    )
+
+    return len(points)

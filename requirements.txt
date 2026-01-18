@@ -2,6 +2,6 @@ fastapi
 uvicorn
 qdrant-client
 sentence-transformers
-torch
-numpy
+groq
+tiktoken
 python-dotenv

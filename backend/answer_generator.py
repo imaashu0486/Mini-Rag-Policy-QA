@@ -1,33 +1,41 @@
-def generate_answer(question: str, context: str, max_sentences: int = 3) -> str:
+import os
+from groq import Groq
+
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+def generate_answer(question: str, contexts: list[dict]) -> str:
     """
-    Generate a concise, grounded answer by extracting
-    and deduplicating relevant sentences from context.
+    contexts = [
+      {"id": 1, "text": "...", "source": "..."}
+    ]
     """
 
-    sentences = []
-    seen = set()
+    if not GROQ_API_KEY:
+        return "LLM not configured."
 
-    # Split context into sentences
-    for block in context.split("\n\n"):
-        for sent in block.split("."):
-            sent = sent.strip()
-            if len(sent) < 20:
-                continue
+    client = Groq(api_key=GROQ_API_KEY)
 
-            key = sent.lower()
-            if key not in seen:
-                seen.add(key)
-                sentences.append(sent)
+    context_block = "\n\n".join(
+        f"[{c['id']}] {c['text']}" for c in contexts
+    )
 
-            if len(sentences) >= max_sentences:
-                break
-        if len(sentences) >= max_sentences:
-            break
+    system_prompt = (
+        "Answer ONLY using the provided context.\n"
+        "If the answer is not present, say 'I don't know'.\n"
+        "Use inline citations like [1], [2]."
+    )
 
-    if not sentences:
-        return (
-            "The provided documents do not contain enough information "
-            "to answer this question confidently."
-        )
+    response = client.chat.completions.create(
+        model="llama-3.1-8b-instant",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": f"Context:\n{context_block}\n\nQuestion:\n{question}"
+            },
+        ],
+        temperature=0.2,
+        max_tokens=300,
+    )
 
-    return ". ".join(sentences) + "."
+    return response.choices[0].message.content.strip()

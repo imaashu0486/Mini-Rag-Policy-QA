@@ -1,17 +1,24 @@
-import os
-
-ENABLE_RERANK = os.getenv("ENABLE_RERANK", "false").lower() == "true"
-
 from sentence_transformers import CrossEncoder
 
-model = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+# Lazy load to avoid startup crash
+_model = None
 
-def rerank_chunks(query, chunks, top_n=5):
+def get_model():
+    global _model
+    if _model is None:
+        _model = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+    return _model
+
+
+def rerank_chunks(query: str, chunks: list[dict], top_n: int = 5):
+    if not chunks:
+        return []
+
     pairs = [(query, c["text"]) for c in chunks]
-    scores = model.predict(pairs)
+    scores = get_model().predict(pairs)
 
-    for i, score in enumerate(scores):
-        chunks[i]["score"] = float(score)
+    for c, score in zip(chunks, scores):
+        c["score"] = float(score)
 
-    ranked = sorted(chunks, key=lambda x: x["score"], reverse=True)
-    return ranked[:top_n]
+    chunks.sort(key=lambda x: x["score"], reverse=True)
+    return chunks[:top_n]

@@ -1,75 +1,285 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Mini RAG</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: auto;
-            padding: 40px;
-        }
-        input, button {
-            width: 100%;
-            padding: 10px;
-            margin-top: 10px;
-        }
-        .answer {
-            margin-top: 20px;
-            padding: 15px;
-            background: #f5f5f5;
-        }
-        .citation {
-            font-size: 0.9em;
-            color: #555;
-            margin-top: 5px;
-        }
-    </style>
+<meta charset="UTF-8" />
+<title>Mini RAG Assistant</title>
+
+<style>
+#docInfo {
+  font-size: 14px;
+  color: #444;
+  line-height: 1.6;
+}
+
+:root {
+  --bg: linear-gradient(135deg, #667eea, #764ba2);
+  --card: #ffffff;
+  --accent: #5a67d8;
+  --text: #2d3748;
+}
+
+* {
+  box-sizing: border-box;
+  font-family: "Segoe UI", sans-serif;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  display: flex;
+  justify-content: center;
+  padding: 30px;
+}
+
+.container {
+  max-width: 1000px;
+  width: 100%;
+}
+
+h1 {
+  color: white;
+  text-align: center;
+  margin-bottom: 25px;
+}
+
+.card {
+  background: var(--card);
+  border-radius: 14px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+}
+
+.card h2 {
+  margin-top: 0;
+  color: var(--accent);
+}
+
+textarea, input {
+  width: 100%;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  margin-bottom: 10px;
+}
+
+button {
+  background: var(--accent);
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: bold;
+  margin-right: 8px;
+}
+
+button.secondary {
+  background: #e2e8f0;
+  color: #333;
+}
+
+button:hover {
+  opacity: 0.9;
+}
+
+.answer {
+  white-space: pre-wrap;
+  color: var(--text);
+  margin-top: 10px;
+}
+
+/* Confidence badge */
+.badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: bold;
+  margin: 8px 0;
+}
+
+.badge.high { background: #38a169; color: white; }
+.badge.low { background: #ecc94b; color: #333; }
+.badge.none { background: #e53e3e; color: white; }
+
+/* Retrieved chunks */
+.chunk {
+  background: #f7fafc;
+  border-left: 4px solid var(--accent);
+  padding: 10px;
+  margin-bottom: 10px;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.chunk.used {
+  border-left: 6px solid #38a169;
+  background: #f0fff4;
+}
+
+/* Exact sentence highlight */
+.highlight {
+  background: #fff3bf;
+  padding: 3px 6px;
+  border-radius: 4px;
+  display: inline-block;
+  margin-bottom: 6px;
+}
+
+.hidden {
+  display: none;
+}
+
+.metrics {
+  font-size: 13px;
+  color: #555;
+  margin-top: 6px;
+}
+</style>
 </head>
+
 <body>
+<div class="container">
 
-<h2>Mini RAG – Policy Q&A</h2>
+<h1>📚 Mini RAG Assistant</h1>
 
-<input id="question" placeholder="Ask a question about the document..." />
-<button onclick="ask()">Ask</button>
+<!-- INGEST -->
+<div class="card">
+  <h2>📥 Ingest Document</h2>
+  <textarea id="docText" rows="6" placeholder="Paste document text here..."></textarea>
+  <input id="docTitle" placeholder="Document title" />
+  <input id="docSource" placeholder="Source" />
+  <button onclick="ingest()">Ingest</button>
+</div>
+<div id="ingestStatus" style="margin-top:10px; font-weight:bold;"></div>
 
-<div class="answer" id="result"></div>
+<!-- INDEXED DOCUMENT -->
+<div class="card" id="docStatus">
+  <h2>📄 Indexed Document</h2>
+  <div id="docInfo">Loading...</div>
+</div>
+
+
+<!-- QUERY -->
+<div class="card">
+  <h2>❓ Ask a Question</h2>
+  <input id="question" placeholder="Ask a question about the documents..." />
+  <button onclick="ask()">Ask</button>
+  <button class="secondary" onclick="toggleChunks()">Toggle Retrieved Chunks</button>
+
+  <div id="answer" class="answer"></div>
+  <div id="confidence"></div>
+  <div id="metrics" class="metrics"></div>
+  <div id="sources"></div>
+
+  <div id="chunks" class="hidden"></div>
+</div>
+
+</div>
 
 <script>
-async function ask() {
-    const q = document.getElementById("question").value;
-    const result = document.getElementById("result");
+async function loadDocumentInfo() {
+  const r = await fetch("/document");
+  const d = await r.json();
 
-    result.innerHTML = "Loading...";
+  if (!d || !d.title) {
+    docInfo.innerHTML = "⚠️ No document indexed yet. Please ingest a document.";
+    return;
+  }
 
-    try {
-        const res = await fetch("/ask", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ question: q })
-        });
-
-        const data = await res.json();
-
-        let html = `<b>Answer:</b><br>${data.answer}<br><br>`;
-
-        if (data.citations && data.citations.length > 0) {
-            html += `<b>Citations:</b>`;
-            data.citations.forEach(c => {
-                html += `<div class="citation">[${c.id}] ${c.source} – ${c.section}</div>`;
-            });
-        }
-
-        html += `<br><i>Latency: ${data.latency_ms} ms</i>`;
-        result.innerHTML = html;
-
-    } catch (err) {
-        result.innerHTML = `<b>Error:</b> ${err}`;
-        console.error(err);
-    }
+  docInfo.innerHTML = `
+    <b>${d.title}</b><br>
+    Source: ${d.source}
+  `;
 }
-</script>
 
+
+async function ingest() {
+  ingestStatus.innerHTML = "⏳ Ingesting document...";
+
+  await fetch("/ingest", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      text: docText.value,
+      title: docTitle.value,
+      source: docSource.value
+    })
+  });
+
+  ingestStatus.innerHTML = "✅ Document ingested successfully.";
+  loadDocumentInfo();   // updates Indexed Document card
+}
+
+
+async function ask() {
+  answer.innerText = "Thinking...";
+  confidence.innerHTML = "";
+  metrics.innerHTML = "";
+  sources.innerHTML = "";
+  chunks.innerHTML = "";
+
+  const r = await fetch("/query", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ question: question.value })
+  });
+
+  const j = await r.json();
+
+  // Answer
+  answer.innerText = j.answer;
+
+  // Confidence
+  confidence.innerHTML =
+    `<span class="badge ${j.confidence.toLowerCase()}">
+      Confidence: ${j.confidence}
+     </span>`;
+
+  // Metrics
+  metrics.innerHTML = `
+    ⏱ Retrieval: ${j.metrics.retrieval_ms} ms |
+    Rerank: ${j.metrics.rerank_ms} ms |
+    LLM: ${j.metrics.llm_ms} ms |
+    Total: ${j.metrics.total_ms} ms<br>
+    📦 Retrieved: ${j.metrics.retrieved_chunks} |
+    Reranked: ${j.metrics.reranked_chunks} |
+    Cited: ${j.metrics.cited_chunks}
+  `;
+
+  // Sources
+  if (j.sources?.length) {
+    sources.innerHTML =
+      "<b>Sources:</b><br>" +
+      j.sources.map(s => `• ${s.title} (${s.source})`).join("<br>");
+  }
+
+  // Retrieved chunks
+  if (j.retrieved_chunks?.length) {
+    chunks.innerHTML =
+      "<h3>🔎 Retrieved Chunks</h3>" +
+      j.retrieved_chunks.map(c =>
+        `<div class="chunk ${c.used_in_answer ? "used" : ""}">
+          <b>${c.title}</b><br>
+          <i>${c.source}</i><br><br>
+
+          ${c.highlight ? `<div class="highlight">${c.highlight}</div>` : ""}
+
+          ${c.text}
+        </div>`
+      ).join("");
+  }
+}
+
+function toggleChunks() {
+  chunks.classList.toggle("hidden");
+}
+
+loadDocumentInfo();
+
+</script>
 
 </body>
 </html>

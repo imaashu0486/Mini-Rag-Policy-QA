@@ -1,31 +1,26 @@
-from backend.qdrant_conn import get_qdrant_client
+import os
 from backend.embeddings import embed_texts
-from backend.config import settings
+from backend.qdrant_conn import get_client
 
+COLLECTION = os.getenv("QDRANT_COLLECTION")
 
-def retrieve_chunks(query: str, top_k: int = 10):
-    """
-    Universal Qdrant retrieval (works across all client versions)
-    """
-    client = get_qdrant_client()
-    query_vector = embed_texts([query])[0]
+def retrieve(query: str, top_k: int = 10):
+    client = get_client()
+    vector = embed_texts([query])[0]
 
-    response = client.query_points(
-        collection_name=settings.QDRANT_COLLECTION,
+    results = client.query_points(
+        collection_name=COLLECTION,
         prefetch=[],
-        query=query_vector,
-        limit=top_k,
-        with_payload=True
-    )
+        query=vector,
+        limit=top_k
+    ).points
 
-    chunks = []
-    for point in response.points:
-        chunks.append({
-            "text": point.payload["text"],
-            "score": point.score,
-            "metadata": {
-                k: v for k, v in point.payload.items() if k != "text"
-            }
-        })
-
-    return chunks
+    return [
+        {
+            "text": r.payload["text"],
+            "source": r.payload.get("source"),
+            "title": r.payload.get("title"),
+            "position": r.payload.get("position"),
+        }
+        for r in results
+    ]

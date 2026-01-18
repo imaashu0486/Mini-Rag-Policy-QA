@@ -1,19 +1,30 @@
+import os
 from qdrant_client import QdrantClient
 from qdrant_client.models import VectorParams, Distance
-from backend.config import settings
 
-def get_qdrant_client():
-    return QdrantClient(url=settings.QDRANT_URL)
+QDRANT_URL = os.getenv("QDRANT_URL")
+QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
+COLLECTION = os.getenv("QDRANT_COLLECTION")
 
-def ensure_collection(vector_size: int):
-    client = get_qdrant_client()
+VECTOR_SIZE = 384  # match embedding model
+
+def get_client():
+    return QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
+
+from qdrant_client.http.exceptions import UnexpectedResponse
+
+def ensure_collection():
+    client = get_client()
     collections = [c.name for c in client.get_collections().collections]
 
-    if settings.QDRANT_COLLECTION not in collections:
-        client.create_collection(
-            collection_name=settings.QDRANT_COLLECTION,
-            vectors_config=VectorParams(
-                size=vector_size,
-                distance=Distance.COSINE
+    if COLLECTION not in collections:
+        try:
+            client.create_collection(
+                collection_name=COLLECTION,
+                vectors_config=VectorParams(
+                    size=VECTOR_SIZE,
+                    distance=Distance.COSINE
+                )
             )
-        )
+        except UnexpectedResponse:
+            pass  # collection already exists
