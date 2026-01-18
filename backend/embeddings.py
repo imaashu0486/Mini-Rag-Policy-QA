@@ -1,7 +1,7 @@
-import os
+import hashlib
 from backend.config import USE_LOCAL_EMBEDDINGS
 
-# ---------- FULL MODE ----------
+# ---------- FULL MODE (LOCAL / REAL) ----------
 if USE_LOCAL_EMBEDDINGS:
     from sentence_transformers import SentenceTransformer
 
@@ -14,20 +14,13 @@ if USE_LOCAL_EMBEDDINGS:
         return _model
 
     def embed_texts(texts: list[str]) -> list[list[float]]:
-        return get_model().encode(
-            texts,
-            normalize_embeddings=True
-        ).tolist()
+        return get_model().encode(texts, normalize_embeddings=True).tolist()
 
-# ---------- LITE MODE ----------
+# ---------- LITE MODE (MOCK EMBEDDINGS) ----------
 else:
-    from openai import OpenAI
-
-    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    def fake_embedding(text: str, dim: int = 384):
+        h = hashlib.sha256(text.encode()).digest()
+        return [(b / 255.0) for b in h[:dim]]
 
     def embed_texts(texts: list[str]) -> list[list[float]]:
-        response = client.embeddings.create(
-            model="text-embedding-3-small",
-            input=texts
-        )
-        return [d.embedding for d in response.data]
+        return [fake_embedding(t) for t in texts]
