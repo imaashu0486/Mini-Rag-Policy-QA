@@ -165,7 +165,7 @@ pip install -r requirements.txt
 '''bash
 uvicorn backend.app:app --reload
 ```
-- Open in browser:
+Open in browser:
 ```bash
 http://127.0.0.1:8000/ui/
 ```
