@@ -59,6 +59,7 @@ This prevents hallucination and ensures document grounding.
 
 ```bash
 GET/health
+```
 
 - This endpoint verifies that the backend service is running and reachable.
 
