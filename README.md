@@ -1,3 +1,47 @@
+# 📚 Mini RAG System – Policy Question Answering
+
+A lightweight, production-style **Retrieval-Augmented Generation (RAG)** system for answering questions over policy documents with transparent retrieval, citations, and confidence estimation.
+
+This project demonstrates a **real-world RAG pipeline** while remaining deployable on **free-tier cloud platforms**.
+
+---
+
+## 🔗 Live Demo
+
+🌐 **Live Application**  
+👉 https://mini-rag-policy-qa.onrender.com/ui/
+
+> ⚠️ The live deployment runs in **Lite Mode** to remain memory-safe on free-tier hosting.
+
+---
+
+## 👤 Author
+
+**Ashish Ranjan**  
+- GitHub: https://github.com/imaashu0486  
+- Resume: https://drive.google.com/file/d/1saJAWGx4y5ueEf-mXXW_Z-6jkaIHAnpP/view?usp=sharing  
+
+---
+
+## 🧠 Project Overview
+
+This system allows users to:
+- Ingest policy documents
+- Ask natural language questions
+- Retrieve relevant document chunks
+- View supporting evidence with citations
+- See confidence estimation for each answer
+
+The design focuses on **correctness, transparency, and deployment realism** rather than black-box generation.
+
+---
+
+## 🏗️ System Architecture
+
+
+
+
+
 # Mini RAG System – Policy Question Answering
 
 ## Overview
