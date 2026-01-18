@@ -15,14 +15,6 @@ This project demonstrates a **real-world RAG pipeline** while remaining deployab
 
 ---
 
-## 👤 Author
-
-**Ashish Ranjan**  
-- GitHub: https://github.com/imaashu0486  
-- Resume: https://drive.google.com/file/d/1saJAWGx4y5ueEf-mXXW_Z-6jkaIHAnpP/view?usp=sharing  
-
----
-
 ## 🧠 Project Overview
 
 This system allows users to:
@@ -184,4 +176,11 @@ http://127.0.0.1:8000/ui/
 - Single collection assumed per deployment
 
 These trade-offs are intentional and documented
+
+## 👤 Author
+
+**Ashish Ranjan**  
+- GitHub: https://github.com/imaashu0486  
+- Resume: https://drive.google.com/file/d/1saJAWGx4y5ueEf-mXXW_Z-6jkaIHAnpP/view?usp=sharing  
+
 
