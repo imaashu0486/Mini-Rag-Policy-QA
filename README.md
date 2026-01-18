@@ -38,17 +38,17 @@ The design focuses on **correctness, transparency, and deployment realism** rath
 
 ## 🏗️ System Architecture
 User Query
-↓
+->
 Embedding
-↓
+->
 Qdrant Vector Search
-↓
+->
 Reranking (Full Mode)
-↓
+->
 Context Selection
-↓
+->
 Answer Generation
-↓
+->
 Citations + Confidence
 
 
@@ -164,7 +164,7 @@ pip install -r requirements.txt
 # 3️⃣ Run Backend
 '''bash
 uvicorn backend.app:app --reload
-``
+```
 - Open in browser:
 ```bash
 http://127.0.0.1:8000/ui/
@@ -182,5 +182,6 @@ http://127.0.0.1:8000/ui/
 - Lite mode uses mock embeddings (deployment trade-off)
 - No authentication layer (out of scope)
 - Single collection assumed per deployment
+
 These trade-offs are intentional and documented
 
