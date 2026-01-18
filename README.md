@@ -161,7 +161,7 @@ docker run -p 6333:6333 qdrant/qdrant
 pip install -r requirements.txt
 ```
 ### 3️⃣ Run Backend
-'''bash
+```bash
 uvicorn backend.app:app --reload
 ```
 
