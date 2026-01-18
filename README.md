@@ -152,15 +152,15 @@ DEPLOYMENT_MODE=lite
 
 ## 🚀 Running Locally
 
-# 1️⃣ Start Qdrant
+### 1️⃣ Start Qdrant
 ```bash
 docker run -p 6333:6333 qdrant/qdrant
 ```
-# 2️⃣ Install Dependencies
+### 2️⃣ Install Dependencies
 ```bash
 pip install -r requirements.txt
 ```
-# 3️⃣ Run Backend
+### 3️⃣ Run Backend
 '''bash
 uvicorn backend.app:app --reload
 ```
